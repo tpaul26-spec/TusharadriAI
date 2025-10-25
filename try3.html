@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Puter AI — Resizable Image Generator</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#071026 0%,#021019 100%);color:#e6eef6;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .app{width:980px;max-width:100%;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:18px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    h1{margin:0 0 12px;font-size:20px}
+    .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
+    .card{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    textarea{width:100%;height:84px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;resize:vertical}
+    input[type=number],input[type=text]{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .row{display:flex;gap:8px}
+    .controls{display:flex;gap:8px;align-items:center;margin-top:8px}
+    button{background:var(--accent);color:#022;border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+    .preview{display:flex;flex-direction:column;gap:8px}
+    .preview-box{height:420px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px dashed rgba(255,255,255,0.03);position:relative}
+    .preview-box img{max-width:100%;max-height:100%;display:block}
+    .meta{font-size:13px;color:var(--muted)}
+    .small{font-size:12px;color:var(--muted)}
+    .footer{margin-top:12px;font-size:13px;color:var(--muted)}
+    .controls .group{display:flex;flex-direction:column;gap:6px}
+    .inline{display:flex;align-items:center;gap:8px}
+    .top-help{font-size:13px;color:var(--muted);margin-bottom:8px}
+    .spinner{width:18px;height:18px;border-radius:50%;border:3px solid rgba(255,255,255,0.06);border-top-color:var(--accent);animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .note{font-size:12px;color:#fef3c7;background:#3b2b00;padding:8px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Puter AI — Resizable Image Generator</h1>
+    <div class="top-help">Prompt daal, width/height set kar, "Generate" dabao. (By default testMode on hai — real image chahiye toh testMode off karo)</div>
+
+    <div class="grid">
+      <div class="card">
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" placeholder="e.g. A neon-lit futuristic city skyline at sunset with flying cars"></textarea>
+
+        <div style="margin-top:10px;display:flex;gap:10px;">
+          <div style="flex:1;">
+            <label for="width">Width (px)</label>
+            <input id="width" type="number" min="16" value="512" />
+          </div>
+          <div style="width:110px;">
+            <label for="height">Height (px)</label>
+            <input id="height" type="number" min="16" value="512" />
+          </div>
+          <div style="width:140px;">
+            <label for="fit">Fit</label>
+            <select id="fit">
+              <option value="contain">contain</option>
+              <option value="cover">cover</option>
+              <option value="fill">fill</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="group" style="flex:1">
+            <label><input id="testMode" type="checkbox" checked /> Test mode (placeholder image)</label>
+            <label><input id="allowUpscale" type="checkbox" /> Allow upscale (if smaller image returned)</label>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+            <button id="generate">Generate</button>
+            <button id="clear" class="secondary">Clear</button>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <div id="status" class="meta">Idle</div>
+        </div>
+
+        <div class="footer">Tip: agar real generation chahiye toh <b>testMode ka checkbox untick</b> karein aur Puter API access hona chahiye.</div>
+      </div>
+
+      <div class="card preview">
+        <label>Preview</label>
+        <div class="preview-box" id="previewBox">
+          <div id="placeholder" class="meta">No image yet</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+          <div class="small" id="dimInfo">—</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="download" class="secondary">Download</button>
+            <button id="openTab" class="secondary">Open in new tab</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px" class="note">Note: Yeh sample UI Puter's public JS v2 ko use karta hai. Agar actual images nahi aati, ensure your Puter session/API access and uncheck Test mode.</div>
+  </div>
+
+  <script src="https://js.puter.com/v2/"></script>
+  <script>
+    // Elements
+    const promptEl = document.getElementById('prompt');
+    const generateBtn = document.getElementById('generate');
+    const statusEl = document.getElementById('status');
+    const previewBox = document.getElementById('previewBox');
+    const placeholder = document.getElementById('placeholder');
+    const widthEl = document.getElementById('width');
+    const heightEl = document.getElementById('height');
+    const fitEl = document.getElementById('fit');
+    const testModeEl = document.getElementById('testMode');
+    const allowUpscaleEl = document.getElementById('allowUpscale');
+    const downloadBtn = document.getElementById('download');
+    const openTabBtn = document.getElementById('openTab');
+    const clearBtn = document.getElementById('clear');
+    const dimInfo = document.getElementById('dimInfo');
+
+    let lastImageUrl = null; // Object URL or data URL
+
+    function setStatus(text, busy=false){
+      statusEl.innerHTML = busy ? `<span class="spinner"></span> ${text}` : text;
+    }
+
+    function clearPreview(){
+      previewBox.innerHTML = '<div id="placeholder" class="meta">No image yet</div>';
+      lastImageUrl = null;
+      dimInfo.textContent = '—';
+    }
+
+    clearBtn.addEventListener('click', ()=>{
+      clearPreview();
+      promptEl.value = '';
+    });
+
+    downloadBtn.addEventListener('click', ()=>{
+      if(!lastImageUrl) return alert('No image to download');
+      const a = document.createElement('a');
+      a.href = lastImageUrl;
+      a.download = 'puter-image.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+
+    openTabBtn.addEventListener('click', ()=>{
+      if(!lastImageUrl) return alert('No image to open');
+      window.open(lastImageUrl, '_blank');
+    });
+
+    generateBtn.addEventListener('click', async ()=>{
+      const prompt = promptEl.value.trim();
+      if(!prompt) return alert('Prompt daal bhai.');
+
+      const w = Math.max(16, parseInt(widthEl.value) || 512);
+      const h = Math.max(16, parseInt(heightEl.value) || 512);
+      const fit = fitEl.value; // contain | cover | fill
+      const testMode = testModeEl.checked;
+
+      setStatus('Generating...', true);
+
+      try{
+        // puter.ai.txt2img(prompt, testMode) returns an <img> element in the user's earlier example.
+        // We call it and then resize the displayed element using CSS to the width/height chosen.
+        const imageEl = await puter.ai.txt2img(prompt, testMode);
+
+        // If the library returned a DOM <img>, use it. Otherwise if it returned a URL string, create an <img>.
+        let imgNode;
+        if(imageEl instanceof HTMLImageElement) imgNode = imageEl;
+        else if(typeof imageEl === 'string'){
+          imgNode = new Image();
+          imgNode.src = imageEl;
+          await imgNode.decode();
+        } else {
+          // Fallback: try to stringify
+          imgNode = new Image();
+          imgNode.src = URL.createObjectURL(new Blob([''], {type:'image/png'}));
+        }
+
+        // Cleanup previous
+        previewBox.innerHTML = '';
+
+        // Wrap in a container to apply fit and explicit px size
+        const wrapper = document.createElement('div');
+        wrapper.style.width = w + 'px';
+        wrapper.style.height = h + 'px';
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.justifyContent = 'center';
+        wrapper.style.overflow = 'hidden';
+
+        // Apply fit
+        if(fit === 'contain'){
+          imgNode.style.maxWidth = '100%';
+          imgNode.style.maxHeight = '100%';
+          imgNode.style.objectFit = 'contain';
+        } else if(fit === 'cover'){
+          imgNode.style.width = '100%';
+          imgNode.style.height = '100%';
+          imgNode.style.objectFit = 'cover';
+        } else {
+          imgNode.style.width = '100%';
+          imgNode.style.height = '100%';
+          imgNode.style.objectFit = 'fill';
+        }
+
+        // If returned image is remote data URL, keep reference. If blob or generated element, convert to dataURL for download/open.
+        // Create canvas to optionally upscale/downscale to exact pixel size if user wants exact dimensions.
+        const exactCanvas = document.createElement('canvas');
+        const allowUpscale = allowUpscaleEl.checked;
+        const srcW = imgNode.naturalWidth || imgNode.width || w;
+        const srcH = imgNode.naturalHeight || imgNode.height || h;
+
+        // If image smaller than desired and upscale not allowed, we'll keep original size but CSS will show it scaled up visually.
+        const targetW = (srcW < w && !allowUpscale) ? srcW : w;
+        const targetH = (srcH < h && !allowUpscale) ? srcH : h;
+
+        exactCanvas.width = targetW;
+        exactCanvas.height = targetH;
+        const ctx = exactCanvas.getContext('2d');
+
+        // draw after ensuring image is loaded
+        await ensureImageDecoded(imgNode);
+        // Draw with cover/contain logic roughly implemented
+        if(fit === 'cover'){
+          // scale to cover canvas
+          const scale = Math.max(targetW/srcW, targetH/srcH);
+          const dw = srcW * scale;
+          const dh = srcH * scale;
+          const dx = (targetW - dw)/2;
+          const dy = (targetH - dh)/2;
+          ctx.drawImage(imgNode, dx, dy, dw, dh);
+        } else if(fit === 'contain'){
+          const scale = Math.min(targetW/srcW, targetH/srcH);
+          const dw = srcW * scale;
+          const dh = srcH * scale;
+          const dx = (targetW - dw)/2;
+          const dy = (targetH - dh)/2;
+          ctx.fillStyle = 'rgba(0,0,0,0)';
+          ctx.fillRect(0,0,targetW,targetH);
+          ctx.drawImage(imgNode, dx, dy, dw, dh);
+        } else {
+          // fill
+          ctx.drawImage(imgNode, 0,0,targetW,targetH);
+        }
+
+        const dataURL = exactCanvas.toDataURL('image/png');
+        lastImageUrl = dataURL;
+
+        // show scaled wrapper but we want preview box responsive — center wrapper
+        wrapper.style.boxShadow = '0 6px 20px rgba(2,6,23,0.6)';
+        const finalImg = new Image();
+        finalImg.src = dataURL;
+        finalImg.style.maxWidth = '100%';
+        finalImg.style.maxHeight = '100%';
+        finalImg.style.display = 'block';
+        wrapper.appendChild(finalImg);
+
+        previewBox.appendChild(wrapper);
+
+        dimInfo.textContent = `Rendered: ${targetW}×${targetH} px · Source: ${srcW}×${srcH} px`;
+        setStatus('Done');
+
+      } catch(err){
+        console.error(err);
+        setStatus('Error — check console');
+        alert('Error while generating image: '+(err.message||err));
+      }
+    });
+
+    function ensureImageDecoded(img){
+      return new Promise((res,rej)=>{
+        if(img.complete && img.naturalWidth !== 0) return res();
+        img.onload = ()=>res();
+        img.onerror = (e)=>rej(e);
+      });
+    }
+
+  </script>
+</body>
+</html>
